@@ -9,12 +9,8 @@ import {
   ClipboardCheck,
   ArrowRightLeft,
   Trash2,
-  Building2,
-  Users,
   LayoutDashboard,
   LogOut,
-  FileText,
-  Settings,
 } from "lucide-react";
 
 interface DashboardLayoutProps {
@@ -36,20 +32,6 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
     },
     { href: "/inventory/transfers", label: "Transfers", icon: ArrowRightLeft, roles: ["all"] },
     { href: "/inventory/disposals", label: "Disposals", icon: Trash2, roles: ["all"] },
-    { href: "/inventory/reports", label: "Reports", icon: FileText, roles: ["all"] },
-    {
-      href: "/inventory/settings",
-      label: "Ministries",
-      icon: Building2,
-      roles: ["asset_manager", "system_admin"],
-    },
-    { href: "/inventory/settings", label: "Users", icon: Users, roles: ["system_admin"] },
-    {
-      href: "/inventory/settings",
-      label: "Settings",
-      icon: Settings,
-      roles: ["asset_manager", "system_admin"],
-    },
   ];
 
   // Filter navigation based on user roles
@@ -59,11 +41,6 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
     if (item.roles.includes("asset_manager") && (isAssetManager || isSystemAdmin)) return true;
     return false;
   });
-
-  // Remove duplicate settings items (they all point to /inventory/settings)
-  const uniqueNavItems = filteredNavItems.filter(
-    (item, index, self) => index === self.findIndex((t) => t.href === item.href)
-  );
 
   // Get user role display name
   const getRoleDisplay = () => {
@@ -85,7 +62,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
 
           {/* Navigation */}
           <nav className="flex-1 space-y-1 p-4">
-            {uniqueNavItems.map((item) => {
+            {filteredNavItems.map((item) => {
               const Icon = item.icon;
               const isActive = pathname === item.href;
               return (

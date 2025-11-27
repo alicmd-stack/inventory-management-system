@@ -1,10 +1,18 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
-import { getAssets, getVerifications, getPendingTransfers, getPendingDisposals } from "@/lib/supabase/queries";
+import { 
+  getAssets, 
+  getVerifications, 
+  getPendingTransfers, 
+  getPendingDisposals,
+  getRecentTransfers,
+  getRecentDisposals
+} from "@/lib/supabase/queries";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Package, CheckCircle, ArrowRightLeft, Trash2 } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
+import { useMemo } from "react";
 
 export default function DashboardPage() {
   // Fetch summary stats using schema-specific queries
@@ -20,8 +28,26 @@ export default function DashboardPage() {
   const { data: verifications, isLoading: loadingVerifications } = useQuery({
     queryKey: ["verifications"],
     queryFn: async () => {
-      const { data, error } = await getVerifications(5);
+      const { data, error } = await getVerifications(10);
       if (error) console.error("Error fetching verifications:", error);
+      return data || [];
+    },
+  });
+
+  const { data: recentTransfers, isLoading: loadingRecentTransfers } = useQuery({
+    queryKey: ["recent-transfers"],
+    queryFn: async () => {
+      const { data, error } = await getRecentTransfers(10);
+      if (error) console.error("Error fetching recent transfers:", error);
+      return data || [];
+    },
+  });
+
+  const { data: recentDisposals, isLoading: loadingRecentDisposals } = useQuery({
+    queryKey: ["recent-disposals"],
+    queryFn: async () => {
+      const { data, error } = await getRecentDisposals(10);
+      if (error) console.error("Error fetching recent disposals:", error);
       return data || [];
     },
   });
@@ -43,6 +69,89 @@ export default function DashboardPage() {
       return data || [];
     },
   });
+
+  // Combine all activities and sort by date
+  const recentActivities = useMemo(() => {
+    const activities: Array<{
+      id: string;
+      type: 'verification' | 'transfer' | 'disposal';
+      date: string;
+      assetTag: string;
+      description: string;
+    }> = [];
+
+    // Add verifications
+    verifications?.forEach((v: any) => {
+      activities.push({
+        id: v.id,
+        type: 'verification',
+        date: v.verification_date || v.created_at,
+        assetTag: v.asset?.asset_tag_number || 'Unknown',
+        description: `Condition: ${v.condition}`,
+      });
+    });
+
+    // Add transfers
+    recentTransfers?.forEach((t: any) => {
+      const status = t.transfer_date 
+        ? 'Completed' 
+        : t.approved_by 
+          ? 'Approved' 
+          : 'Pending';
+      activities.push({
+        id: t.id,
+        type: 'transfer',
+        date: t.transfer_date || t.created_at,
+        assetTag: t.asset?.asset_tag_number || 'Unknown',
+        description: `Transfer ${status}`,
+      });
+    });
+
+    // Add disposals
+    recentDisposals?.forEach((d: any) => {
+      const status = d.rejected_by
+        ? 'Rejected'
+        : d.approved_by
+          ? 'Approved'
+          : d.reviewed_by
+            ? 'Under Review'
+            : 'Pending';
+      activities.push({
+        id: d.id,
+        type: 'disposal',
+        date: d.disposal_date || d.created_at,
+        assetTag: d.asset?.asset_tag_number || 'Unknown',
+        description: `${d.disposal_method} - ${status}`,
+      });
+    });
+
+    // Sort by date (latest first)
+    return activities.sort((a, b) => 
+      new Date(b.date).getTime() - new Date(a.date).getTime()
+    ).slice(0, 10);
+  }, [verifications, recentTransfers, recentDisposals]);
+
+  const getActivityIcon = (type: 'verification' | 'transfer' | 'disposal') => {
+    switch (type) {
+      case 'verification':
+        return { Icon: CheckCircle, color: 'text-green-600' };
+      case 'transfer':
+        return { Icon: ArrowRightLeft, color: 'text-orange-600' };
+      case 'disposal':
+        return { Icon: Trash2, color: 'text-red-600' };
+    }
+  };
+
+  const getActivityLabel = (type: 'verification' | 'transfer' | 'disposal') => {
+    switch (type) {
+      case 'verification':
+        return 'Verification';
+      case 'transfer':
+        return 'Transfer';
+      case 'disposal':
+        return 'Disposal';
+    }
+  };
 
   const stats = [
     {
@@ -113,36 +222,41 @@ export default function DashboardPage() {
           <CardTitle>Recent Activity</CardTitle>
         </CardHeader>
         <CardContent>
-          {loadingVerifications ? (
+          {(loadingVerifications || loadingRecentTransfers || loadingRecentDisposals) ? (
             <div className="space-y-3">
-              {[1, 2, 3].map((i) => (
+              {[1, 2, 3, 4, 5].map((i) => (
                 <Skeleton key={i} className="h-12 w-full" />
               ))}
             </div>
           ) : (
             <div className="space-y-3">
-              {verifications?.slice(0, 5).map((verification: any) => (
-                <div
-                  key={verification.id}
-                  className="flex items-center justify-between p-3 bg-slate-50 rounded-lg"
-                >
-                  <div className="flex items-center gap-3">
-                    <CheckCircle className="h-5 w-5 text-green-600" />
-                    <div>
-                      <p className="text-sm font-medium text-slate-900">
-                        Verification completed
-                      </p>
-                      <p className="text-xs text-slate-600">
-                        {verification.asset?.asset_tag_number || "Unknown"} - {verification.condition}
-                      </p>
+              {recentActivities.map((activity) => {
+                const { Icon, color } = getActivityIcon(activity.type);
+                const label = getActivityLabel(activity.type);
+                
+                return (
+                  <div
+                    key={`${activity.type}-${activity.id}`}
+                    className="flex items-center justify-between p-3 bg-slate-50 rounded-lg"
+                  >
+                    <div className="flex items-center gap-3">
+                      <Icon className={`h-5 w-5 ${color}`} />
+                      <div>
+                        <p className="text-sm font-medium text-slate-900">
+                          {label}
+                        </p>
+                        <p className="text-xs text-slate-600">
+                          {activity.assetTag} - {activity.description}
+                        </p>
+                      </div>
                     </div>
+                    <span className="text-xs text-slate-500">
+                      {new Date(activity.date).toLocaleDateString()}
+                    </span>
                   </div>
-                  <span className="text-xs text-slate-500">
-                    {new Date(verification.verification_date).toLocaleDateString()}
-                  </span>
-                </div>
-              ))}
-              {(!verifications || verifications.length === 0) && (
+                );
+              })}
+              {recentActivities.length === 0 && (
                 <p className="text-sm text-slate-500 text-center py-8">No recent activity</p>
               )}
             </div>

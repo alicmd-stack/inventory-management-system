@@ -1,8 +1,27 @@
 "use client";
 
-import { useQuery } from "@tanstack/react-query";
+import { useState } from "react";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { createClient } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/button";
+import { Plus } from "lucide-react";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
+import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import {
   Table,
   TableBody,
@@ -37,6 +56,80 @@ const conditionColors: Record<string, string> = {
 
 export default function VerificationPage() {
   const supabase = createClient();
+  const queryClient = useQueryClient();
+  const [dialogOpen, setDialogOpen] = useState(false);
+  const [formData, setFormData] = useState({
+    asset_id: "",
+    verification_date: new Date().toISOString().split("T")[0],
+    condition: "",
+    physical_location_at_verification: "",
+    remarks: "",
+  });
+
+  // Fetch active assets for verification
+  const { data: assets } = useQuery({
+    queryKey: ["assets-for-verification"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .schema("inventory")
+        .from("asset")
+        .select("id, asset_tag_number, asset_description, physical_location")
+        .eq("asset_status", "active")
+        .order("asset_tag_number");
+      
+      if (error) {
+        console.error("Error fetching assets:", error);
+        return [];
+      }
+      
+      return data;
+    },
+  });
+
+  // Get unique locations from assets
+  const availableLocations = Array.from(
+    new Set(assets?.map((a) => a.physical_location).filter(Boolean))
+  ).sort();
+
+  // Create verification mutation
+  const createVerificationMutation = useMutation({
+    mutationFn: async (data: typeof formData) => {
+      const { data: session } = await supabase.auth.getSession();
+      if (!session.session?.user.id) throw new Error("Not authenticated");
+
+      const { error } = await supabase.schema("inventory").from("verification_history").insert({
+        asset_id: data.asset_id,
+        verification_date: data.verification_date,
+        condition: data.condition,
+        physical_location_at_verification: data.physical_location_at_verification || null,
+        remarks: data.remarks || null,
+        verified_by: session.session.user.id,
+      });
+
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["verification-history-full"] });
+      queryClient.invalidateQueries({ queryKey: ["verifications"] });
+      queryClient.invalidateQueries({ queryKey: ["recent-verifications"] });
+      setDialogOpen(false);
+      setFormData({
+        asset_id: "",
+        verification_date: new Date().toISOString().split("T")[0],
+        condition: "",
+        physical_location_at_verification: "",
+        remarks: "",
+      });
+    },
+    onError: (error: Error) => {
+      console.error("Verification creation failed:", error.message);
+    },
+  });
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    createVerificationMutation.mutate(formData);
+  };
 
   const { data: verifications, isLoading } = useQuery({
     queryKey: ["verification-history-full"],
@@ -111,9 +204,124 @@ export default function VerificationPage() {
             Track asset verification records and responsible verifiers
           </p>
         </div>
-        <Button disabled title="Verification creation will be available soon">
-          Record Verification
-        </Button>
+        <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+          <DialogTrigger asChild>
+            <Button>
+              <Plus className="h-4 w-4 mr-2" />
+              Record Verification
+            </Button>
+          </DialogTrigger>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Record Asset Verification</DialogTitle>
+            </DialogHeader>
+            <form onSubmit={handleSubmit} className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="asset_id">Asset *</Label>
+                <Select
+                  value={formData.asset_id}
+                  onValueChange={(value) =>
+                    setFormData({ ...formData, asset_id: value })
+                  }
+                  required
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select asset" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {assets?.map((asset) => (
+                      <SelectItem key={asset.id} value={asset.id}>
+                        {asset.asset_tag_number} - {asset.asset_description || "No description"}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="verification_date">Verification Date *</Label>
+                <Input
+                  id="verification_date"
+                  type="date"
+                  value={formData.verification_date}
+                  onChange={(e) =>
+                    setFormData({ ...formData, verification_date: e.target.value })
+                  }
+                  required
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="condition">Condition *</Label>
+                <Select
+                  value={formData.condition}
+                  onValueChange={(value) =>
+                    setFormData({ ...formData, condition: value })
+                  }
+                  required
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select condition" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="New">New</SelectItem>
+                    <SelectItem value="Good">Good</SelectItem>
+                    <SelectItem value="Fair">Fair</SelectItem>
+                    <SelectItem value="Poor">Poor</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="physical_location">Physical Location</Label>
+                <Input
+                  id="physical_location"
+                  type="text"
+                  placeholder="Select or type location"
+                  value={formData.physical_location_at_verification}
+                  onChange={(e) =>
+                    setFormData({
+                      ...formData,
+                      physical_location_at_verification: e.target.value,
+                    })
+                  }
+                  list="location-suggestions"
+                />
+                <datalist id="location-suggestions">
+                  {availableLocations.map((location) => (
+                    <option key={location} value={location} />
+                  ))}
+                </datalist>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="remarks">Remarks</Label>
+                <Textarea
+                  id="remarks"
+                  placeholder="Additional notes..."
+                  value={formData.remarks}
+                  onChange={(e) =>
+                    setFormData({ ...formData, remarks: e.target.value })
+                  }
+                  rows={3}
+                />
+              </div>
+
+              <div className="flex gap-3">
+                <Button type="submit" disabled={createVerificationMutation.isPending}>
+                  {createVerificationMutation.isPending ? "Recording..." : "Record Verification"}
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => setDialogOpen(false)}
+                >
+                  Cancel
+                </Button>
+              </div>
+            </form>
+          </DialogContent>
+        </Dialog>
       </div>
 
       <div className="bg-white rounded-lg border border-slate-200">

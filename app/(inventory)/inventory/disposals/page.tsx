@@ -219,6 +219,7 @@ export default function DisposalsPage() {
       queryClient.invalidateQueries({ queryKey: ["assets-for-disposal"] });
       // Invalidate dashboard queries
       queryClient.invalidateQueries({ queryKey: ["disposals"] });
+      queryClient.invalidateQueries({ queryKey: ["recent-disposals"] });
       setDialogOpen(false);
       setFormData({
         asset_id: "",
@@ -255,6 +256,7 @@ export default function DisposalsPage() {
       queryClient.invalidateQueries({ queryKey: ["disposal-history-full"] });
       // Invalidate dashboard queries (status changed)
       queryClient.invalidateQueries({ queryKey: ["disposals"] });
+      queryClient.invalidateQueries({ queryKey: ["recent-disposals"] });
     },
   });
 
@@ -306,6 +308,7 @@ export default function DisposalsPage() {
       queryClient.invalidateQueries({ queryKey: ["assets-for-transfer"] });
       // Invalidate dashboard queries (disposal approved, asset disposed)
       queryClient.invalidateQueries({ queryKey: ["disposals"] });
+      queryClient.invalidateQueries({ queryKey: ["recent-disposals"] });
     },
   });
 
@@ -330,6 +333,7 @@ export default function DisposalsPage() {
       queryClient.invalidateQueries({ queryKey: ["disposal-history-full"] });
       // Invalidate dashboard queries (disposal rejected, no longer pending)
       queryClient.invalidateQueries({ queryKey: ["disposals"] });
+      queryClient.invalidateQueries({ queryKey: ["recent-disposals"] });
     },
   });
 

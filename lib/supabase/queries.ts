@@ -57,3 +57,25 @@ export async function getPendingDisposals() {
   return { data, error };
 }
 
+export async function getRecentTransfers(limit = 10) {
+  const supabase = createClient();
+  const { data, error } = await supabase
+    .schema("inventory")
+    .from("transfer_history")
+    .select("*, asset:asset_id(asset_tag_number)")
+    .order("created_at", { ascending: false })
+    .limit(limit);
+  return { data, error };
+}
+
+export async function getRecentDisposals(limit = 10) {
+  const supabase = createClient();
+  const { data, error } = await supabase
+    .schema("inventory")
+    .from("disposal_history")
+    .select("*, asset:asset_id(asset_tag_number)")
+    .order("created_at", { ascending: false })
+    .limit(limit);
+  return { data, error };
+}
+

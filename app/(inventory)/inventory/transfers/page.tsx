@@ -240,6 +240,7 @@ export default function TransfersPage() {
       queryClient.invalidateQueries({ queryKey: ["assets-for-transfer"] });
       // Invalidate dashboard queries (new pending transfer created)
       queryClient.invalidateQueries({ queryKey: ["transfers"] });
+      queryClient.invalidateQueries({ queryKey: ["recent-transfers"] });
       setDialogOpen(false);
       setFormData({
         asset_id: "",
@@ -274,6 +275,7 @@ export default function TransfersPage() {
       queryClient.invalidateQueries({ queryKey: ["transfer-history-full"] });
       // Invalidate dashboard queries (transfer approved, still pending completion)
       queryClient.invalidateQueries({ queryKey: ["transfers"] });
+      queryClient.invalidateQueries({ queryKey: ["recent-transfers"] });
     },
   });
 
@@ -322,6 +324,7 @@ export default function TransfersPage() {
       queryClient.invalidateQueries({ queryKey: ["assets"] });
       // Invalidate dashboard queries (transfer completed, no longer pending)
       queryClient.invalidateQueries({ queryKey: ["transfers"] });
+      queryClient.invalidateQueries({ queryKey: ["recent-transfers"] });
     },
   });
 
