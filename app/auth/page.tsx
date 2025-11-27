@@ -2,7 +2,7 @@
 
 import { createClient } from "@/lib/supabase/client";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 /**
  * Auth page - Handles authentication
@@ -19,13 +19,19 @@ export default function AuthPage() {
   const [error, setError] = useState<string | null>(null);
   const [mode, setMode] = useState<"signin" | "signup">("signin");
 
-  // If external auth URL is configured, redirect to it (production mode)
-  // Otherwise, show local auth form (development mode)
+  // Configurable URLs from env
   const externalAuthUrl = process.env.NEXT_PUBLIC_AUTH_URL;
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL;
+
+  // If external auth URL is configured, redirect to it (production mode)
+  useEffect(() => {
+    if (!externalAuthUrl) return;
+    if (typeof window === "undefined") return;
+    window.location.href = externalAuthUrl;
+  }, [externalAuthUrl]);
 
   if (externalAuthUrl) {
-    // Redirect to external auth app (ALIC-Calendar)
-    window.location.href = externalAuthUrl;
+    // Show a simple redirecting screen during client-side redirect
     return (
       <div className="flex min-h-screen items-center justify-center">
         <p className="text-muted-foreground">Redirecting to external authentication...</p>
@@ -63,7 +69,7 @@ export default function AuthPage() {
       email,
       password,
       options: {
-        emailRedirectTo: `${window.location.origin}/inventory`,
+        emailRedirectTo: appUrl ? `${appUrl}/inventory` : undefined,
       },
     });
 
