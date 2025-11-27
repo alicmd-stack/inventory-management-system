@@ -35,16 +35,20 @@ export async function getVerifications(limit = 5) {
 
 export async function getPendingTransfers() {
   const supabase = createClient();
+  // Count transfers that are not yet completed (transfer_date is null)
+  // This includes both "Pending Approval" and "Approved" statuses
   const { data, error } = await supabase
     .schema("inventory")
     .from("transfer_history")
     .select("*")
-    .is("approved_by", null);
+    .is("transfer_date", null);
   return { data, error };
 }
 
 export async function getPendingDisposals() {
   const supabase = createClient();
+  // Count disposals that are not yet completed (disposal_date is in the future or pending)
+  // This includes both "Pending" and "Approved" disposals
   const { data, error } = await supabase
     .schema("inventory")
     .from("disposal_history")

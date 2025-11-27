@@ -6,7 +6,6 @@ import { createClient } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Plus, Search } from "lucide-react";
-import Link from "next/link";
 import { Badge } from "@/components/ui/badge";
 import {
   Table,
@@ -19,11 +18,13 @@ import {
 import { Skeleton } from "@/components/ui/skeleton";
 import { useAuth } from "@/contexts/AuthContext";
 import { getMinistries } from "@/lib/supabase/queries";
+import { useRouter } from "next/navigation";
 
 export default function AssetsPage() {
   const { isAssetManager } = useAuth();
   const [searchTerm, setSearchTerm] = useState("");
   const supabase = createClient();
+  const router = useRouter();
 
   const { data: assets, isLoading } = useQuery({
     queryKey: ["assets", searchTerm],
@@ -124,7 +125,6 @@ export default function AssetsPage() {
               <TableHead>Location</TableHead>
               <TableHead>Status</TableHead>
               <TableHead>Quantity</TableHead>
-              <TableHead className="text-right">Actions</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -150,16 +150,17 @@ export default function AssetsPage() {
                     <Skeleton className="h-6 w-20" />
                   </TableCell>
                   <TableCell>
-                    <Skeleton className="h-4 w-12" />
-                  </TableCell>
-                  <TableCell>
-                    <Skeleton className="h-8 w-16 ml-auto" />
+                <Skeleton className="h-4 w-12" />
                   </TableCell>
                 </TableRow>
               ))
             ) : assets && assets.length > 0 ? (
               assets.map((asset: any) => (
-                <TableRow key={asset.id}>
+            <TableRow
+              key={asset.id}
+              className="cursor-pointer"
+              onClick={() => router.push(`/inventory/assets/${asset.id}`)}
+            >
                   <TableCell className="font-medium">{asset.asset_tag_number}</TableCell>
                   <TableCell className="max-w-xs truncate">
                     {asset.asset_description || "—"}
@@ -171,18 +172,11 @@ export default function AssetsPage() {
                   <TableCell>
                     {asset.quantity} {asset.unit_of_measure}
                   </TableCell>
-                  <TableCell className="text-right">
-                    <Link href={`/inventory/assets/${asset.id}`}>
-                      <Button variant="ghost" size="sm">
-                        View
-                      </Button>
-                    </Link>
-                  </TableCell>
                 </TableRow>
               ))
             ) : (
               <TableRow>
-                <TableCell colSpan={8} className="text-center py-12">
+            <TableCell colSpan={7} className="text-center py-12">
                   <p className="text-slate-500">No assets found</p>
                 </TableCell>
               </TableRow>

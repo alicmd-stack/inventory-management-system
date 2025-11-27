@@ -62,7 +62,7 @@ export default function DashboardPage() {
       loading: loadingVerifications,
     },
     {
-      title: "Pending Transfers",
+      title: "Active Transfers",
       value: transfers?.length || 0,
       icon: ArrowRightLeft,
       color: "text-orange-600",
