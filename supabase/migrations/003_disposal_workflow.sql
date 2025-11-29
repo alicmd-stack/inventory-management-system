@@ -14,3 +14,6 @@ COMMENT ON COLUMN inventory.disposal_history.reviewed_by IS 'User who reviewed t
 COMMENT ON COLUMN inventory.disposal_history.approved_by IS 'User who approved the disposal';
 COMMENT ON COLUMN inventory.disposal_history.rejected_by IS 'User who rejected the disposal';
 
+
+
+

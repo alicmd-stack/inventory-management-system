@@ -245,3 +245,6 @@ queryClient.invalidateQueries({ queryKey: ["<dashboard-query-key>"] });
 - `/app/(inventory)/inventory/transfers/page.tsx` - Transfer mutations
 - `/lib/supabase/queries.ts` - Query functions
 
+
+
+

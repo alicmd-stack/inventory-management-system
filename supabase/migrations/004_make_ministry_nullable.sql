@@ -7,3 +7,6 @@ ALTER COLUMN ministry_assigned DROP NOT NULL;
 -- Add comment
 COMMENT ON COLUMN inventory.asset.ministry_assigned IS 'Ministry currently using the asset. NULL when asset is disposed.';
 
+
+
+

@@ -26,3 +26,6 @@ CREATE TRIGGER set_asset_updated_by
 COMMENT ON FUNCTION inventory.set_updated_by() IS 
   'Automatically sets updated_by to current user on asset updates';
 
+
+
+

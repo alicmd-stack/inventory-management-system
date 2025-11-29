@@ -211,3 +211,6 @@ When implementing the asset edit feature:
 2. Add application validation before update (already documented above)
 3. Database trigger is already in place ✅
 
+
+
+
