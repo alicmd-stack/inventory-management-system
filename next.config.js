@@ -14,15 +14,29 @@ const nextConfig = {
     },
   },
   async rewrites() {
-    const calendarApp = process.env.ROUTE_CALENDAR_APP;
+    const calendarApp = process.env.CALENDAR_APP_URL || "https://alic-calendar.vercel.app";
     return [
+      // Auth routes - proxy to Calendar app
       {
         source: "/auth",
         destination: `${calendarApp}/auth`,
       },
       {
-        source: "/auth/:path*",
-        destination: `${calendarApp}/auth/:path*`,
+        source: "/forgot-password",
+        destination: `${calendarApp}/forgot-password`,
+      },
+      {
+        source: "/reset-password",
+        destination: `${calendarApp}/reset-password`,
+      },
+      // Calendar routes
+      {
+        source: "/dashboard",
+        destination: `${calendarApp}/dashboard`,
+      },
+      {
+        source: "/dashboard/:path*",
+        destination: `${calendarApp}/dashboard/:path*`,
       },
       {
         source: "/calendar",
@@ -33,12 +47,28 @@ const nextConfig = {
         destination: `${calendarApp}/calendar/:path*`,
       },
       {
-        source: "/dashboard",
-        destination: `${calendarApp}/dashboard`,
+        source: "/admin",
+        destination: `${calendarApp}/admin`,
       },
       {
-        source: "/dashboard/:path*",
-        destination: `${calendarApp}/dashboard/:path*`,
+        source: "/admin/:path*",
+        destination: `${calendarApp}/admin/:path*`,
+      },
+      {
+        source: "/users",
+        destination: `${calendarApp}/users`,
+      },
+      {
+        source: "/users/:path*",
+        destination: `${calendarApp}/users/:path*`,
+      },
+      {
+        source: "/rooms",
+        destination: `${calendarApp}/rooms`,
+      },
+      {
+        source: "/rooms/:path*",
+        destination: `${calendarApp}/rooms/:path*`,
       },
       {
         source: "/public",
@@ -47,6 +77,10 @@ const nextConfig = {
       {
         source: "/public/:path*",
         destination: `${calendarApp}/public/:path*`,
+      },
+      {
+        source: "/assets/:path*",
+        destination: `${calendarApp}/assets/:path*`,
       },
     ];
   },

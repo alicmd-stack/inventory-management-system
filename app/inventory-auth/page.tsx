@@ -5,12 +5,11 @@ import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 
 /**
- * Auth page - Handles authentication
- * 
- * Development: Provides email/password login via Supabase Auth
- * Production: Redirects to external auth app (ALIC-Calendar)
+ * Inventory-only auth page (kept for reference / fallback).
+ * Not mounted on /auth anymore so rewrites can proxy to the Calendar app.
+ * Access locally via /inventory-auth if needed.
  */
-export default function AuthPage() {
+export default function InventoryAuthPage() {
   const router = useRouter();
   const supabase = createClient();
   const [email, setEmail] = useState("");
@@ -90,9 +89,7 @@ export default function AuthPage() {
           <p className="text-muted-foreground mt-2">
             {mode === "signin" ? "Sign in to your account" : "Create a new account"}
           </p>
-          <p className="text-xs text-yellow-600 mt-2 font-medium">
-            🔧 Local Development Mode
-          </p>
+          <p className="text-xs text-yellow-600 mt-2 font-medium">🔧 Local Development Mode</p>
         </div>
 
         <div className="border rounded-lg p-6 space-y-6">
@@ -131,9 +128,7 @@ export default function AuthPage() {
             {error && (
               <div
                 className={`text-sm p-3 rounded-md ${
-                  error.includes("Check your email")
-                    ? "bg-green-50 text-green-800"
-                    : "bg-red-50 text-red-800"
+                  error.includes("Check your email") ? "bg-green-50 text-green-800" : "bg-red-50 text-red-800"
                 }`}
               >
                 {error}
@@ -158,9 +153,7 @@ export default function AuthPage() {
               }}
               className="text-sm text-primary hover:underline"
             >
-              {mode === "signin"
-                ? "Don't have an account? Sign up"
-                : "Already have an account? Sign in"}
+              {mode === "signin" ? "Don't have an account? Sign up" : "Already have an account? Sign in"}
             </button>
           </div>
         </div>
@@ -173,3 +166,5 @@ export default function AuthPage() {
     </div>
   );
 }
+
+
