@@ -106,10 +106,15 @@ export async function GET(request: NextRequest) {
 
     // Combine the data
     const usersWithRoles = profiles.map((profile) => {
-      const roles = userRoles
-        ?.filter((ur) => ur.user_id === profile.id)
-        .map((ur) => ur.role)
-        .filter((r): r is { id: string; name: string; description: string | null } => r !== null) || [];
+      const userRolesList = userRoles?.filter((ur) => ur.user_id === profile.id) || [];
+      
+      const roles = userRolesList
+        .map((ur) => {
+          // Handle both array and object responses from Supabase
+          const roleData = Array.isArray(ur.role) ? ur.role[0] : ur.role;
+          return roleData as { id: string; name: string; description: string | null } | null;
+        })
+        .filter((r): r is { id: string; name: string; description: string | null } => r !== null);
 
       return {
         ...profile,

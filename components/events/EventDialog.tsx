@@ -5,12 +5,7 @@ import { useQuery } from "@tanstack/react-query";
 import { createClient } from "@/lib/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { useOrganization } from "@/contexts/OrganizationContext";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -32,9 +27,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Clock, MapPin, User, Repeat } from "lucide-react";
 import { format, parseISO } from "date-fns";
 import { cn } from "@/lib/utils";
-import {
-  RejectionReasonDialog,
-} from "@/components/events/RejectionReasonDialog";
+import { RejectionReasonDialog } from "@/components/events/RejectionReasonDialog";
 import {
   RecurringActionScope,
   RecurringEventActionDialog,
@@ -46,15 +39,64 @@ import {
   rruleToRecurrenceConfig,
 } from "@/components/calendar/RecurrenceSelector";
 
+type EventStatus = "draft" | "pending_review" | "approved" | "rejected" | "published";
+
+interface Room {
+  id: string;
+  name: string;
+  color: string | null;
+  allow_overlap: boolean;
+}
+
+interface EventData {
+  id: string;
+  title: string;
+  description?: string | null;
+  room_id: string;
+  starts_at: string;
+  ends_at: string;
+  status: EventStatus;
+  created_by: string;
+  is_recurring?: boolean;
+  parent_event_id?: string | null;
+  recurrence_rule?: string | null;
+}
+
+type FormState = {
+  title: string;
+  description: string;
+  room_id: string;
+  starts_at: string;
+  ends_at: string;
+};
+
 interface EventDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   eventId: string | null;
   initialDate?: Date | null;
   onSuccess: () => void;
-  allEvents?: any[];
+  allEvents?: EventWithRelations[];
   onEventSelect?: (eventId: string) => void;
 }
+
+type ConflictEvent = Pick<
+  EventData,
+  "id" | "title" | "starts_at" | "ends_at" | "status" | "created_by"
+>;
+
+type EventWithRelations = EventData & {
+  room?: { name: string; color: string | null } | null;
+  creator?: {
+    full_name?: string | null;
+    ministry_name?: string | null;
+  } | null;
+};
+
+type PendingUpdateData = {
+  updatePayload: Partial<FormState>;
+  shouldAutoSubmit: boolean;
+};
 
 const eventSchema = z
   .object({
@@ -64,13 +106,10 @@ const eventSchema = z
     starts_at: z.string().min(1, "Start time is required"),
     ends_at: z.string().min(1, "End time is required"),
   })
-  .refine(
-    (data) => new Date(data.ends_at) > new Date(data.starts_at),
-    {
-      message: "End time must be after start time",
-      path: ["ends_at"],
-    },
-  );
+  .refine((data) => new Date(data.ends_at) > new Date(data.starts_at), {
+    message: "End time must be after start time",
+    path: ["ends_at"],
+  });
 
 const EventDialog = ({
   open,
@@ -87,7 +126,7 @@ const EventDialog = ({
   const { toast } = useToast();
   const [loading, setLoading] = useState(false);
 
-  const [formData, setFormData] = useState({
+  const [formData, setFormData] = useState<FormState>({
     title: "",
     description: "",
     room_id: "",
@@ -104,19 +143,16 @@ const EventDialog = ({
   const [validationError, setValidationError] = useState("");
   const [roomConflict, setRoomConflict] = useState<{
     hasConflict: boolean;
-    conflictingEvent?: any;
+    conflictingEvent?: ConflictEvent;
     creatorName?: string;
   }>({ hasConflict: false });
   const [rejectionDialogOpen, setRejectionDialogOpen] = useState(false);
   const [rejectionLoading, setRejectionLoading] = useState(false);
-  const [recurringDeleteDialogOpen, setRecurringDeleteDialogOpen] =
-    useState(false);
-  const [recurringRejectDialogOpen, setRecurringRejectDialogOpen] =
-    useState(false);
-  const [recurringUpdateDialogOpen, setRecurringUpdateDialogOpen] =
-    useState(false);
+  const [recurringDeleteDialogOpen, setRecurringDeleteDialogOpen] = useState(false);
+  const [recurringRejectDialogOpen, setRecurringRejectDialogOpen] = useState(false);
+  const [recurringUpdateDialogOpen, setRecurringUpdateDialogOpen] = useState(false);
   const [pendingRejectionReason, setPendingRejectionReason] = useState("");
-  const [pendingUpdateData, setPendingUpdateData] = useState<any>(null);
+  const [pendingUpdateData, setPendingUpdateData] = useState<PendingUpdateData | null>(null);
 
   const isAdmin = isSystemAdmin;
 
@@ -124,11 +160,7 @@ const EventDialog = ({
     queryKey: ["event", eventId],
     queryFn: async () => {
       if (!eventId) return null;
-      const { data, error } = await supabase
-        .from("events")
-        .select("*")
-        .eq("id", eventId)
-        .single();
+      const { data, error } = await supabase.from("events").select("*").eq("id", eventId).single();
 
       if (error) throw error;
       return data;
@@ -189,17 +221,10 @@ const EventDialog = ({
       const baseDate = initialDate || new Date();
       let startDate: Date;
       if (initialDate) {
-        const hasTime =
-          baseDate.getHours() !== 0 || baseDate.getMinutes() !== 0;
+        const hasTime = baseDate.getHours() !== 0 || baseDate.getMinutes() !== 0;
         startDate = hasTime
           ? baseDate
-          : new Date(
-              baseDate.getFullYear(),
-              baseDate.getMonth(),
-              baseDate.getDate(),
-              9,
-              0,
-            );
+          : new Date(baseDate.getFullYear(), baseDate.getMonth(), baseDate.getDate(), 9, 0);
       } else {
         startDate = baseDate;
       }
@@ -234,7 +259,7 @@ const EventDialog = ({
     }
 
     try {
-      const selectedRoom = rooms?.find((r: any) => r.id === formData.room_id);
+      const selectedRoom = rooms?.find((r: Room) => r.id === formData.room_id);
       if (selectedRoom?.allow_overlap) {
         setRoomConflict({ hasConflict: false });
         return;
@@ -253,7 +278,7 @@ const EventDialog = ({
           ends_at,
           status,
           created_by
-        `,
+        `
         )
         .eq("room_id", formData.room_id)
         .in("status", ["pending_review", "approved", "published"])
@@ -261,8 +286,8 @@ const EventDialog = ({
 
       if (error) throw error;
 
-      const conflicts =
-        conflictingEvents?.filter((e: any) => e.id !== eventId) || [];
+      const conflictEvents = (conflictingEvents || []) as ConflictEvent[];
+      const conflicts = conflictEvents.filter((e) => e.id !== eventId);
 
       if (conflicts.length > 0) {
         const conflict = conflicts[0];
@@ -365,9 +390,7 @@ const EventDialog = ({
 
       if (eventId) {
         const shouldAutoSubmit =
-          !isAdmin &&
-          event &&
-          (event.status === "draft" || event.status === "pending_review");
+          !isAdmin && event && (event.status === "draft" || event.status === "pending_review");
 
         const updatePayload = shouldAutoSubmit
           ? { ...eventData, status: "pending_review" as const }
@@ -380,10 +403,7 @@ const EventDialog = ({
           return;
         }
 
-        const { error } = await supabase
-          .from("events")
-          .update(updatePayload)
-          .eq("id", eventId);
+        const { error } = await supabase.from("events").update(updatePayload).eq("id", eventId);
 
         if (error) throw error;
 
@@ -426,7 +446,7 @@ const EventDialog = ({
             new Date(endsAt),
             recurrence,
             parent.id,
-            100,
+            100
           );
 
           const instancesData = instances.map((inst) => ({
@@ -443,9 +463,7 @@ const EventDialog = ({
           }));
 
           if (instancesData.length > 0) {
-            const { error: instancesError } = await supabase
-              .from("events")
-              .insert(instancesData);
+            const { error: instancesError } = await supabase.from("events").insert(instancesData);
 
             if (instancesError) throw instancesError;
           }
@@ -480,13 +498,12 @@ const EventDialog = ({
       if (error instanceof z.ZodError) {
         toast({
           title: "Validation error",
-          description: error.errors[0]?.message,
+          description: error.issues[0]?.message,
         });
       } else {
         toast({
           title: "Error",
-          description:
-            error instanceof Error ? error.message : "An error occurred",
+          description: error instanceof Error ? error.message : "An error occurred",
         });
       }
     } finally {
@@ -498,7 +515,7 @@ const EventDialog = ({
     year: number,
     month: number,
     dayOfWeek: number,
-    weekOfMonth: number,
+    weekOfMonth: number
   ): Date | null => {
     if (weekOfMonth === -1) {
       const lastDay = new Date(year, month + 1, 0);
@@ -530,7 +547,7 @@ const EventDialog = ({
     endDate: Date,
     config: RecurrenceConfig,
     _parentId: string,
-    maxInstances: number,
+    maxInstances: number
   ): Array<{ starts_at: Date; ends_at: Date }> => {
     const instances: Array<{ starts_at: Date; ends_at: Date }> = [];
     const duration = endDate.getTime() - startDate.getTime();
@@ -544,9 +561,7 @@ const EventDialog = ({
         : new Date(startDate.getTime() + 365 * 24 * 60 * 60 * 1000);
 
     const maxCount =
-      config.endType === "after" && config.occurrences
-        ? config.occurrences - 1
-        : maxInstances;
+      config.endType === "after" && config.occurrences ? config.occurrences - 1 : maxInstances;
 
     while (count < maxCount && currentDate <= maxDate) {
       let nextDate: Date | null = null;
@@ -566,14 +581,10 @@ const EventDialog = ({
 
             const dayOfWeek = currentDate.getDay();
             const weeksSinceStart = Math.floor(
-              (currentDate.getTime() - startDate.getTime()) /
-                (7 * 24 * 60 * 60 * 1000),
+              (currentDate.getTime() - startDate.getTime()) / (7 * 24 * 60 * 60 * 1000)
             );
 
-            if (
-              config.daysOfWeek?.includes(dayOfWeek) &&
-              weeksSinceStart % config.interval === 0
-            ) {
+            if (config.daysOfWeek?.includes(dayOfWeek) && weeksSinceStart % config.interval === 0) {
               nextDate = new Date(currentDate);
               break;
             }
@@ -591,13 +602,13 @@ const EventDialog = ({
               currentDate.getFullYear(),
               currentDate.getMonth(),
               config.dayOfWeekForMonth,
-              config.weekOfMonth,
+              config.weekOfMonth
             );
             if (nextDate) {
               nextDate.setHours(
                 startDate.getHours(),
                 startDate.getMinutes(),
-                startDate.getSeconds(),
+                startDate.getSeconds()
               );
               currentDate = new Date(nextDate);
             }
@@ -605,12 +616,8 @@ const EventDialog = ({
             currentDate.setDate(
               Math.min(
                 config.dayOfMonth,
-                new Date(
-                  currentDate.getFullYear(),
-                  currentDate.getMonth() + 1,
-                  0,
-                ).getDate(),
-              ),
+                new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 0).getDate()
+              )
             );
             nextDate = new Date(currentDate);
           } else {
@@ -626,12 +633,8 @@ const EventDialog = ({
             currentDate.setDate(
               Math.min(
                 config.dayOfMonth,
-                new Date(
-                  currentDate.getFullYear(),
-                  currentDate.getMonth() + 1,
-                  0,
-                ).getDate(),
-              ),
+                new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 0).getDate()
+              )
             );
           }
           nextDate = new Date(currentDate);
@@ -652,12 +655,12 @@ const EventDialog = ({
     return instances;
   };
 
-  const handleStatusChange = async (newStatus: string) => {
+  const handleStatusChange = async (newStatus: EventStatus) => {
     if (!eventId || !event) return;
 
     setLoading(true);
     try {
-      const updateData: any = { status: newStatus };
+      const updateData: { status: EventStatus; reviewer_id?: string } = { status: newStatus };
 
       if (newStatus === "approved" || newStatus === "rejected") {
         updateData.reviewer_id = user!.id;
@@ -669,12 +672,9 @@ const EventDialog = ({
         .eq("id", event.created_by)
         .single();
 
-      const selectedRoom = rooms?.find((r: any) => r.id === event.room_id);
+      const selectedRoom = rooms?.find((r: Room) => r.id === event.room_id);
 
-      const { error } = await supabase
-        .from("events")
-        .update(updateData)
-        .eq("id", eventId);
+      const { error } = await supabase.from("events").update(updateData).eq("id", eventId);
 
       if (error) throw error;
 
@@ -693,13 +693,10 @@ const EventDialog = ({
             body: {
               to: creator.email,
               eventTitle: event.title,
-              eventStartTime: new Date(event.starts_at).toLocaleString(
-                "en-US",
-                {
-                  dateStyle: "full",
-                  timeStyle: "short",
-                },
-              ),
+              eventStartTime: new Date(event.starts_at).toLocaleString("en-US", {
+                dateStyle: "full",
+                timeStyle: "short",
+              }),
               eventEndTime: new Date(event.ends_at).toLocaleString("en-US", {
                 timeStyle: "short",
               }),
@@ -718,8 +715,7 @@ const EventDialog = ({
     } catch (error) {
       toast({
         title: "Error",
-        description:
-          error instanceof Error ? error.message : "An error occurred",
+        description: error instanceof Error ? error.message : "An error occurred",
       });
     } finally {
       setLoading(false);
@@ -745,10 +741,7 @@ const EventDialog = ({
     setPendingRejectionReason("");
   };
 
-  const executeRejection = async (
-    reason: string,
-    scope: RecurringActionScope,
-  ) => {
+  const executeRejection = async (reason: string, scope: RecurringActionScope) => {
     if (!eventId || !event) return;
 
     setRejectionLoading(true);
@@ -759,7 +752,7 @@ const EventDialog = ({
         .eq("id", event.created_by)
         .single();
 
-      const selectedRoom = rooms?.find((r: any) => r.id === event.room_id);
+      const selectedRoom = rooms?.find((r: Room) => r.id === event.room_id);
 
       if (scope === "all") {
         const parentId = event.parent_event_id || eventId;
@@ -804,13 +797,10 @@ const EventDialog = ({
             body: {
               to: creator.email,
               eventTitle: event.title,
-              eventStartTime: new Date(event.starts_at).toLocaleString(
-                "en-US",
-                {
-                  dateStyle: "full",
-                  timeStyle: "short",
-                },
-              ),
+              eventStartTime: new Date(event.starts_at).toLocaleString("en-US", {
+                dateStyle: "full",
+                timeStyle: "short",
+              }),
               eventEndTime: new Date(event.ends_at).toLocaleString("en-US", {
                 timeStyle: "short",
               }),
@@ -829,8 +819,7 @@ const EventDialog = ({
     } catch (error) {
       toast({
         title: "Error",
-        description:
-          error instanceof Error ? error.message : "An error occurred",
+        description: error instanceof Error ? error.message : "An error occurred",
       });
     } finally {
       setRejectionLoading(false);
@@ -846,9 +835,7 @@ const EventDialog = ({
     }
 
     if (
-      !window.confirm(
-        "Are you sure you want to delete this event? This action cannot be undone.",
-      )
+      !window.confirm("Are you sure you want to delete this event? This action cannot be undone.")
     ) {
       return;
     }
@@ -869,19 +856,13 @@ const EventDialog = ({
       if (scope === "all") {
         const parentId = event.parent_event_id || eventId;
 
-        await supabase
-          .from("events")
-          .delete()
-          .eq("parent_event_id", parentId);
+        await supabase.from("events").delete().eq("parent_event_id", parentId);
 
         await supabase.from("events").delete().eq("id", parentId);
 
         toast({ title: "All events in series deleted" });
       } else {
-        const { error } = await supabase
-          .from("events")
-          .delete()
-          .eq("id", eventId);
+        const { error } = await supabase.from("events").delete().eq("id", eventId);
 
         if (error) throw error;
 
@@ -893,8 +874,7 @@ const EventDialog = ({
     } catch (error) {
       toast({
         title: "Error",
-        description:
-          error instanceof Error ? error.message : "An error occurred",
+        description: error instanceof Error ? error.message : "An error occurred",
       });
     } finally {
       setLoading(false);
@@ -911,15 +891,9 @@ const EventDialog = ({
       if (scope === "all") {
         const parentId = event.parent_event_id || eventId;
 
-        await supabase
-          .from("events")
-          .update(updatePayload)
-          .eq("id", parentId);
+        await supabase.from("events").update(updatePayload).eq("id", parentId);
 
-        await supabase
-          .from("events")
-          .update(updatePayload)
-          .eq("parent_event_id", parentId);
+        await supabase.from("events").update(updatePayload).eq("parent_event_id", parentId);
 
         toast({
           title: shouldAutoSubmit
@@ -930,10 +904,7 @@ const EventDialog = ({
             : undefined,
         });
       } else {
-        const { error } = await supabase
-          .from("events")
-          .update(updatePayload)
-          .eq("id", eventId);
+        const { error } = await supabase.from("events").update(updatePayload).eq("id", eventId);
 
         if (error) throw error;
 
@@ -953,8 +924,7 @@ const EventDialog = ({
     } catch (error) {
       toast({
         title: "Error",
-        description:
-          error instanceof Error ? error.message : "An error occurred",
+        description: error instanceof Error ? error.message : "An error occurred",
       });
     } finally {
       setLoading(false);
@@ -970,19 +940,11 @@ const EventDialog = ({
     date1.getMonth() === date2.getMonth() &&
     date1.getDate() === date2.getDate();
 
-  const eventsForDate = allEvents.filter((e) =>
-    isSameDay(parseISO(e.starts_at), filterDate),
-  );
+  const eventsForDate = allEvents.filter((e) => isSameDay(parseISO(e.starts_at), filterDate));
 
-  const pendingEvents = eventsForDate.filter(
-    (e) => e.status === "pending_review",
-  );
-  const publishedEvents = eventsForDate.filter(
-    (e) => e.status === "published",
-  );
-  const approvedEvents = eventsForDate.filter(
-    (e) => e.status === "approved",
-  );
+  const pendingEvents = eventsForDate.filter((e) => e.status === "pending_review");
+  const publishedEvents = eventsForDate.filter((e) => e.status === "published");
+  const approvedEvents = eventsForDate.filter((e) => e.status === "approved");
   const draftEvents = eventsForDate.filter((e) => e.status === "draft");
 
   const getStatusColor = (status: string) => {
@@ -999,14 +961,14 @@ const EventDialog = ({
   const getStatusLabel = (status: string) =>
     status.replace("_", " ").replace(/\b\w/g, (l) => l.toUpperCase());
 
-  const EventItem = ({ event: evt }: { event: any }) => {
+  const EventItem = ({ event: evt }: { event: EventWithRelations }) => {
     const isOwnEvent = user?.id && evt.created_by === user.id;
 
     return (
       <div
         onClick={() => onEventSelect && onEventSelect(evt.id)}
         className={cn(
-          "group cursor-pointer rounded-lg border-l-4 bg-background p-3 shadow-sm transition-colors hover:bg-accent hover:shadow-md",
+          "group cursor-pointer rounded-lg border-l-4 bg-background p-3 shadow-sm transition-colors hover:bg-accent hover:shadow-md"
         )}
         style={{
           borderLeftColor: evt.room?.color || "#888",
@@ -1020,7 +982,7 @@ const EventDialog = ({
             <Badge
               className={cn(
                 "h-auto shrink-0 px-1.5 py-0.5 text-[9px] text-white",
-                getStatusColor(evt.status),
+                getStatusColor(evt.status)
               )}
             >
               {getStatusLabel(evt.status)}
@@ -1038,10 +1000,7 @@ const EventDialog = ({
 
             <div className="flex items-center gap-1.5">
               <MapPin className="h-3 w-3" />
-              <span
-                className="font-medium"
-                style={{ color: evt.room?.color }}
-              >
+              <span className="font-medium" style={{ color: evt.room?.color || undefined }}>
                 {evt.room?.name}
               </span>
             </div>
@@ -1049,14 +1008,9 @@ const EventDialog = ({
             {evt.creator && (
               <div className="flex items-center gap-1.5">
                 <User className="h-3 w-3" />
-                <span
-                  className={cn(
-                    isOwnEvent && "font-medium text-foreground",
-                  )}
-                >
+                <span className={cn(isOwnEvent && "font-medium text-foreground")}>
                   {isOwnEvent ? "You" : evt.creator.full_name}
-                  {evt.creator.ministry_name &&
-                    ` (${evt.creator.ministry_name})`}
+                  {evt.creator.ministry_name && ` (${evt.creator.ministry_name})`}
                 </span>
               </div>
             )}
@@ -1064,9 +1018,7 @@ const EventDialog = ({
             {evt.is_recurring && (
               <div className="flex items-center gap-1.5">
                 <Repeat className="h-3 w-3 text-primary" />
-                <span className="font-medium text-primary">
-                  Recurring event
-                </span>
+                <span className="font-medium text-primary">Recurring event</span>
               </div>
             )}
           </div>
@@ -1079,7 +1031,7 @@ const EventDialog = ({
     events: evts,
     emptyMessage,
   }: {
-    events: any[];
+    events: EventWithRelations[];
     emptyMessage: string;
   }) => (
     <ScrollArea className="h-[400px]">
@@ -1099,10 +1051,7 @@ const EventDialog = ({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent
-        className="max-h-[90vh] max-w-6xl"
-        aria-describedby="event-dialog-description"
-      >
+      <DialogContent className="max-h-[90vh] max-w-6xl" aria-describedby="event-dialog-description">
         <div className="grid grid-cols-1 gap-6 lg:grid-cols-[1fr_350px]">
           <div className="flex max-h-[calc(90vh-2rem)] flex-col">
             <DialogHeader>
@@ -1130,14 +1079,11 @@ const EventDialog = ({
                       This room is already booked for &quot;
                       {roomConflict.conflictingEvent?.title}
                       &quot;
-                      {roomConflict.creatorName &&
-                        ` by ${roomConflict.creatorName}`}
-                      {roomConflict.conflictingEvent?.status ===
-                        "pending_review" && " (pending review)"}
-                      {roomConflict.conflictingEvent?.status ===
-                        "approved" && " (approved)"}
-                      {roomConflict.conflictingEvent?.status ===
-                        "published" && " (published)"}{" "}
+                      {roomConflict.creatorName && ` by ${roomConflict.creatorName}`}
+                      {roomConflict.conflictingEvent?.status === "pending_review" &&
+                        " (pending review)"}
+                      {roomConflict.conflictingEvent?.status === "approved" && " (approved)"}
+                      {roomConflict.conflictingEvent?.status === "published" && " (published)"}{" "}
                       during this time. Please choose a different time or room.
                     </AlertDescription>
                   </Alert>
@@ -1147,21 +1093,18 @@ const EventDialog = ({
                   <Alert>
                     <Info className="h-4 w-4" />
                     <AlertDescription>
-                      Your event will be automatically submitted for admin
-                      review after creation.
+                      Your event will be automatically submitted for admin review after creation.
                     </AlertDescription>
                   </Alert>
                 )}
 
                 {!isAdmin &&
                   event &&
-                  (event.status === "draft" ||
-                    event.status === "pending_review") && (
+                  (event.status === "draft" || event.status === "pending_review") && (
                     <Alert>
                       <Info className="h-4 w-4" />
                       <AlertDescription>
-                        Any changes will be automatically submitted for admin
-                        review.
+                        Any changes will be automatically submitted for admin review.
                       </AlertDescription>
                     </Alert>
                   )}
@@ -1205,16 +1148,14 @@ const EventDialog = ({
                   <Label htmlFor="room">Room *</Label>
                   <Select
                     value={formData.room_id}
-                    onValueChange={(value) =>
-                      setFormData({ ...formData, room_id: value })
-                    }
+                    onValueChange={(value) => setFormData({ ...formData, room_id: value })}
                     disabled={!canEdit || loading}
                   >
                     <SelectTrigger>
                       <SelectValue placeholder="Select a room" />
                     </SelectTrigger>
                     <SelectContent>
-                      {rooms?.map((room: any) => (
+                      {rooms?.map((room: Room) => (
                         <SelectItem key={room.id} value={room.id}>
                           {room.name}
                         </SelectItem>
@@ -1237,10 +1178,7 @@ const EventDialog = ({
                   </div>
 
                   <div className="space-y-2">
-                    <Label
-                      htmlFor="ends_at"
-                      className={validationError ? "text-destructive" : ""}
-                    >
+                    <Label htmlFor="ends_at" className={validationError ? "text-destructive" : ""}>
                       End Time *
                     </Label>
                     <Input
@@ -1258,9 +1196,7 @@ const EventDialog = ({
                       required
                     />
                     {validationError && (
-                      <p className="text-sm text-destructive">
-                        {validationError}
-                      </p>
+                      <p className="text-sm text-destructive">{validationError}</p>
                     )}
                   </div>
                 </div>
@@ -1275,33 +1211,28 @@ const EventDialog = ({
                   <div className="flex gap-2">
                     <Button
                       type="submit"
-                      disabled={
-                        loading || !!validationError || roomConflict.hasConflict
-                      }
+                      disabled={loading || !!validationError || roomConflict.hasConflict}
                     >
                       {eventId
                         ? !isAdmin &&
-                            event &&
-                            (event.status === "draft" ||
-                              event.status === "pending_review")
+                          event &&
+                          (event.status === "draft" || event.status === "pending_review")
                           ? "Update & Submit for Review"
                           : "Update"
                         : !isAdmin
                           ? "Create & Submit for Review"
                           : "Create"}
                     </Button>
-                    {eventId &&
-                      event &&
-                      (isAdmin || event.created_by === user?.id) && (
-                        <Button
-                          type="button"
-                          variant="destructive"
-                          onClick={handleDelete}
-                          disabled={loading}
-                        >
-                          Delete
-                        </Button>
-                      )}
+                    {eventId && event && (isAdmin || event.created_by === user?.id) && (
+                      <Button
+                        type="button"
+                        variant="destructive"
+                        onClick={handleDelete}
+                        disabled={loading}
+                      >
+                        Delete
+                      </Button>
+                    )}
                   </div>
                 )}
 
@@ -1399,31 +1330,19 @@ const EventDialog = ({
 
                 <div className="mt-4">
                   <TabsContent value="pending" className="m-0">
-                    <EventList
-                      events={pendingEvents}
-                      emptyMessage="No pending events"
-                    />
+                    <EventList events={pendingEvents} emptyMessage="No pending events" />
                   </TabsContent>
 
                   <TabsContent value="approved" className="m-0">
-                    <EventList
-                      events={approvedEvents}
-                      emptyMessage="No approved events"
-                    />
+                    <EventList events={approvedEvents} emptyMessage="No approved events" />
                   </TabsContent>
 
                   <TabsContent value="published" className="m-0">
-                    <EventList
-                      events={publishedEvents}
-                      emptyMessage="No published events"
-                    />
+                    <EventList events={publishedEvents} emptyMessage="No published events" />
                   </TabsContent>
 
                   <TabsContent value="draft" className="m-0">
-                    <EventList
-                      events={draftEvents}
-                      emptyMessage="No draft events"
-                    />
+                    <EventList events={draftEvents} emptyMessage="No draft events" />
                   </TabsContent>
                 </div>
               </Tabs>
@@ -1474,5 +1393,3 @@ const EventDialog = ({
 };
 
 export default EventDialog;
-
-

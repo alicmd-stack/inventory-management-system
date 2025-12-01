@@ -43,7 +43,9 @@ export async function DELETE(
       );
     }
 
-    const role = userRole.role as { name: string } | null;
+    // Type assertion: role is either an object with name or null
+    const roleData = userRole.role as unknown;
+    const role = (Array.isArray(roleData) ? roleData[0] : roleData) as { name: string } | null;
 
     // If not system admin, verify permissions
     if (!sysAdmin) {

@@ -224,6 +224,7 @@ export default function MinistriesPage() {
   const handleEdit = () => {
     if (!selectedMinistry) return;
     // Don't include church_branch_id in update (can't change branch)
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const { church_branch_id, ...updateData } = formData;
     updateMutation.mutate({
       id: selectedMinistry.id,

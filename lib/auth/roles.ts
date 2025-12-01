@@ -38,7 +38,11 @@ export async function getUserRoles(): Promise<string[]> {
   }
 
   return data
-    .map((ur) => (ur.role as { name: string } | null)?.name)
+    .map((ur) => {
+      // Handle both array and object responses from Supabase
+      const roleData = Array.isArray(ur.role) ? ur.role[0] : ur.role;
+      return (roleData as { name: string } | null)?.name;
+    })
     .filter((name): name is string => !!name);
 }
 

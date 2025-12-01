@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useEffect } from "react";
 import { Label } from "@/components/ui/label";
 import {
   Select,
@@ -86,7 +86,6 @@ export const RecurrenceSelector: React.FC<RecurrenceSelectorProps> = ({
   onChange,
   startDate,
 }) => {
-  const [isExpanded, setIsExpanded] = useState(value.frequency !== "none");
 
   const updateConfig = (updates: Partial<RecurrenceConfig>) => {
     onChange({ ...value, ...updates });
@@ -109,11 +108,8 @@ export const RecurrenceSelector: React.FC<RecurrenceSelectorProps> = ({
       const startDay = new Date(startDate).getDay();
       updateConfig({ daysOfWeek: [startDay] });
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [value.frequency, startDate]);
-
-  useEffect(() => {
-    setIsExpanded(value.frequency !== "none");
-  }, [value.frequency]);
 
   const handleFrequencyChange = (freq: string) => {
     const newFreq = freq as RecurrenceConfig["frequency"];
@@ -713,6 +709,7 @@ function getDaySuffix(day: number): string {
 
 export function recurrenceConfigToRRule(
   config: RecurrenceConfig,
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   _startDate: Date,
 ): string | null {
   if (config.frequency === "none") return null;

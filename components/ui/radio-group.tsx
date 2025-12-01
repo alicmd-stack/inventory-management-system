@@ -20,15 +20,15 @@ const RadioGroup = React.forwardRef<HTMLDivElement, RadioGroupProps>(
         {React.Children.map(children, (child) => {
           if (!React.isValidElement(child)) return child;
           if (
-            (child.type as any)?.displayName !== "RadioGroupItem"
+            (child.type as React.ComponentType<RadioGroupItemProps>)?.displayName !== "RadioGroupItem"
           ) {
             return child;
           }
-          const childValue = (child.props as any).value;
+          const childValue = (child.props as RadioGroupItemProps).value;
           return React.cloneElement(child, {
             checked: value === childValue,
             onChange: () => onValueChange?.(childValue),
-          });
+          } as Partial<RadioGroupItemProps>);
         })}
       </div>
     );

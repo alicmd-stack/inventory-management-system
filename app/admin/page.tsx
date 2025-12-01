@@ -27,7 +27,12 @@ import { useOrganization } from "@/contexts/OrganizationContext";
 import { useAuth } from "@/contexts/AuthContext";
 import { useRouter } from "next/navigation";
 
-type AdminEvent = {
+type SupabaseFunctionResponse = {
+  data?: unknown;
+  error?: { message: string };
+};
+
+type DatabaseEvent = {
   id: string;
   title: string;
   description?: string | null;
@@ -39,10 +44,14 @@ type AdminEvent = {
   is_recurring?: boolean | null;
   parent_event_id?: string | null;
   reviewer_notes?: string | null;
+  room_id: string;
   rooms?: {
     name: string;
     color: string | null;
   } | null;
+};
+
+type AdminEvent = DatabaseEvent & {
   room?: {
     name: string;
     color: string | null;
@@ -134,7 +143,7 @@ export default function AdminPage() {
       if (error) throw error;
 
       const eventsWithCreators = await Promise.all(
-        (data || []).map(async (event: any) => {
+        (data || []).map(async (event: DatabaseEvent) => {
           const { data: profile } = await supabase
             .from("profiles")
             .select("full_name, email, ministry_name")
@@ -180,7 +189,7 @@ export default function AdminPage() {
       if (error) throw error;
 
       const eventsWithCreators = await Promise.all(
-        (data || []).map(async (event: any) => {
+        (data || []).map(async (event: DatabaseEvent) => {
           const { data: profile } = await supabase
             .from("profiles")
             .select("full_name, email, ministry_name")
@@ -226,7 +235,7 @@ export default function AdminPage() {
       if (error) throw error;
 
       const eventsWithCreators = await Promise.all(
-        (data || []).map(async (event: any) => {
+        (data || []).map(async (event: DatabaseEvent) => {
           const { data: profile } = await supabase
             .from("profiles")
             .select("full_name, email, ministry_name")
@@ -272,7 +281,7 @@ export default function AdminPage() {
       if (error) throw error;
 
       const eventsWithCreators = await Promise.all(
-        (data || []).map(async (event: any) => {
+        (data || []).map(async (event: DatabaseEvent) => {
           const { data: profile } = await supabase
             .from("profiles")
             .select("full_name, email, ministry_name")
@@ -390,7 +399,7 @@ export default function AdminPage() {
             },
           );
 
-          if ((response as any).error) {
+          if ((response as SupabaseFunctionResponse).error) {
             toast({
               title: "Warning",
               description:
@@ -546,8 +555,9 @@ export default function AdminPage() {
             },
           );
 
-          if ((response as any).error) {
-            console.error("Email notification error:", (response as any).error);
+          const funcResponse = response as SupabaseFunctionResponse;
+          if (funcResponse.error) {
+            console.error("Email notification error:", funcResponse.error);
           }
         } catch (emailError) {
           console.error("Failed to send email notification:", emailError);
@@ -627,8 +637,9 @@ export default function AdminPage() {
             },
           );
 
-          if ((response as any).error) {
-            console.error("Email notification error:", (response as any).error);
+          const funcResponse = response as SupabaseFunctionResponse;
+          if (funcResponse.error) {
+            console.error("Email notification error:", funcResponse.error);
           }
         } catch (emailError) {
           console.error(
