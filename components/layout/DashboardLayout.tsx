@@ -2,6 +2,14 @@
 
 import { useAuth } from "@/contexts/AuthContext";
 import { Button } from "@/components/ui/button";
+import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { usePathname } from "next/navigation";
 import Link from "next/link";
 import { useState, useEffect } from "react";
@@ -76,6 +84,27 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
     if (isSystemAdmin) return "System Admin";
     if (isAssetManager) return "Asset Manager";
     return "Ministry Leader";
+  };
+
+  // Get user initials for avatar
+  const getUserInitials = () => {
+    const email = user?.email || "";
+    const name = email.split("@")[0] || "";
+    if (!name) return "U";
+    return name
+      .split(/[._-]/)
+      .map((part) => part[0])
+      .join("")
+      .toUpperCase()
+      .slice(0, 2);
+  };
+
+  // Get display name from email
+  const getDisplayName = () => {
+    const email = user?.email || "";
+    const name = email.split("@")[0] || "User";
+    // Capitalize first letter
+    return name.charAt(0).toUpperCase() + name.slice(1);
   };
 
   // Dashboard link (standalone, not in a collapsible group)
@@ -401,23 +430,48 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
             })}
           </nav>
 
-          {/* User info & logout - Always at bottom */}
-          <div className="mt-auto border-t p-4">
-            <div className="mb-3 rounded-lg bg-secondary p-3">
-              <p className="text-sm font-medium truncate">{user?.email}</p>
-              <p className="text-xs text-muted-foreground mt-1">
-                {getRoleDisplay()}
-              </p>
-            </div>
-            <Button
-              onClick={signOut}
-              variant="outline"
-              size="sm"
-              className="w-full"
-            >
-              <LogOut className="mr-2 h-4 w-4" />
-              Sign Out
-            </Button>
+          {/* User Profile Section */}
+          <div className="p-4 border-t">
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  variant="ghost"
+                  className="w-full justify-start p-3 h-auto"
+                >
+                  <Avatar className="h-8 w-8">
+                    <AvatarFallback className="text-xs">
+                      {getUserInitials()}
+                    </AvatarFallback>
+                  </Avatar>
+                  <div className="ml-3 text-left flex-1">
+                    <div className="text-sm font-medium truncate">
+                      {getDisplayName()}
+                    </div>
+                    <div className="text-xs text-muted-foreground truncate">
+                      {user?.email}
+                    </div>
+                  </div>
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-56">
+                <DropdownMenuItem>
+                  <Users className="mr-2 h-4 w-4" />
+                  Profile Settings
+                </DropdownMenuItem>
+                <DropdownMenuItem>
+                  <Settings className="mr-2 h-4 w-4" />
+                  Preferences
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem
+                  onClick={signOut}
+                  className="text-destructive"
+                >
+                  <LogOut className="mr-2 h-4 w-4" />
+                  Sign Out
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
           </div>
         </div>
       </aside>
