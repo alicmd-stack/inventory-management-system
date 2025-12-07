@@ -15,10 +15,33 @@ import {
   LogOut,
   Menu,
   X,
+  Home,
+  Settings,
+  DoorOpen,
+  DollarSign,
+  Users,
+  Building,
+  UserCheck,
+  ChevronRight,
 } from "lucide-react";
 
 interface DashboardLayoutProps {
   children: React.ReactNode;
+}
+
+interface NavItem {
+  name: string;
+  href: string;
+  icon: React.ComponentType<{ className?: string }>;
+  description?: string;
+  comingSoon?: boolean;
+  adminOnly?: boolean;
+  external?: boolean; // For cross-app navigation
+}
+
+interface NavSection {
+  title: string;
+  items: NavItem[];
 }
 
 export default function DashboardLayout({ children }: DashboardLayoutProps) {
@@ -26,32 +49,8 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
   const pathname = usePathname();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
-  const navItems = [
-    { href: "/inventory", label: "Dashboard", icon: LayoutDashboard, roles: ["all"] },
-    { href: "/inventory/assets", label: "Assets", icon: Package, roles: ["all"] },
-    {
-      href: "/inventory/verification",
-      label: "Verifications",
-      icon: ClipboardCheck,
-      roles: ["all"],
-    },
-    { href: "/inventory/transfers", label: "Transfers", icon: ArrowRightLeft, roles: ["all"] },
-    { href: "/inventory/disposals", label: "Disposals", icon: Trash2, roles: ["all"] },
-    {
-      href: "/admin",
-      label: "Admin",
-      icon: LayoutDashboard,
-      roles: ["system_admin"],
-    },
-  ];
-
-  // Filter navigation based on user roles
-  const filteredNavItems = navItems.filter((item) => {
-    if (item.roles.includes("all")) return true;
-    if (item.roles.includes("system_admin") && isSystemAdmin) return true;
-    if (item.roles.includes("asset_manager") && (isAssetManager || isSystemAdmin)) return true;
-    return false;
-  });
+  // Treat system admin as having all admin permissions
+  const isAdmin = isSystemAdmin || isAssetManager;
 
   // Get user role display name
   const getRoleDisplay = () => {
@@ -60,12 +59,230 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
     return "Ministry Leader";
   };
 
+  // Navigation configuration - Unified across Calendar and Inventory apps
+  const navigationSections: NavSection[] = [
+    {
+      title: "Overview",
+      items: [
+        {
+          name: "Dashboard",
+          href: "/dashboard",
+          icon: Home,
+          description: "Calendar overview",
+          external: true,
+        },
+      ],
+    },
+    {
+      title: "Calendar",
+      items: [
+        {
+          name: "Event Review",
+          href: "/event-reviews",
+          icon: Settings,
+          description: isAdmin ? "Approve events" : "View my requests",
+          external: true,
+        },
+        ...(isAdmin
+          ? [
+              {
+                name: "Rooms",
+                href: "/rooms",
+                icon: DoorOpen,
+                description: "Manage rooms",
+                adminOnly: true,
+                external: true,
+              },
+            ]
+          : []),
+      ],
+    },
+    {
+      title: "Financial",
+      items: [
+        {
+          name: "Budget",
+          href: "/budget",
+          icon: DollarSign,
+          description: isAdmin ? "Financial management" : "My expenses",
+          external: true,
+        },
+      ],
+    },
+    {
+      title: "Inventory",
+      items: [
+        {
+          name: "Dashboard",
+          href: "/inventory",
+          icon: LayoutDashboard,
+          description: "Inventory overview",
+        },
+        {
+          name: "Assets",
+          href: "/inventory/assets",
+          icon: Package,
+          description: "Manage assets",
+        },
+        {
+          name: "Verifications",
+          href: "/inventory/verification",
+          icon: ClipboardCheck,
+          description: "Verify inventory",
+        },
+        {
+          name: "Transfers",
+          href: "/inventory/transfers",
+          icon: ArrowRightLeft,
+          description: "Asset transfers",
+        },
+        {
+          name: "Disposals",
+          href: "/inventory/disposals",
+          icon: Trash2,
+          description: "Disposed assets",
+        },
+      ],
+    },
+    ...(isSystemAdmin
+      ? [
+          {
+            title: "Administration",
+            items: [
+              {
+                name: "Users & Roles",
+                href: "/admin/users",
+                icon: Users,
+                description: "Manage users",
+                adminOnly: true,
+              },
+              {
+                name: "Branches",
+                href: "/admin/branches",
+                icon: Building,
+                description: "Manage branches",
+                adminOnly: true,
+              },
+              {
+                name: "Ministries",
+                href: "/admin/ministries",
+                icon: UserCheck,
+                description: "Manage ministries",
+                adminOnly: true,
+              },
+            ],
+          },
+        ]
+      : []),
+    ...(isSystemAdmin
+      ? [
+          {
+            title: "Coming Soon",
+            items: [
+              {
+                name: "Members",
+                href: "/members",
+                icon: UserCheck,
+                description: "Church membership",
+                comingSoon: true,
+                adminOnly: true,
+                external: true,
+              },
+            ],
+          },
+        ]
+      : []),
+  ];
+
+  // Check if a path is active
+  const isPathActive = (href: string) => {
+    if (href === "/inventory") {
+      return pathname === href;
+    }
+    return pathname === href || pathname?.startsWith(href + "/");
+  };
+
+  const renderNavItem = (item: NavItem) => {
+    const Icon = item.icon;
+    const isActive = isPathActive(item.href);
+
+    // Handle external navigation (cross-app)
+    if (item.external) {
+      return (
+        <button
+          key={item.name}
+          type="button"
+          onClick={() => {
+            setIsMobileMenuOpen(false);
+            window.location.href = item.href;
+          }}
+          className={cn(
+            "flex w-full items-center gap-3 px-3 py-2.5 rounded-lg transition-all group",
+            "text-muted-foreground hover:text-foreground hover:bg-secondary"
+          )}
+        >
+          <Icon className="h-5 w-5" />
+          <div className="flex-1 text-left">
+            <div className="font-medium text-sm flex items-center gap-2">
+              {item.name}
+            </div>
+            {item.description && (
+              <div className="text-xs text-muted-foreground">
+                {item.description}
+              </div>
+            )}
+          </div>
+        </button>
+      );
+    }
+
+    return (
+      <Link
+        key={item.name}
+        href={item.href}
+        onClick={() => setIsMobileMenuOpen(false)}
+        className={cn(
+          "flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all group",
+          isActive
+            ? "bg-primary text-primary-foreground shadow-sm"
+            : "text-muted-foreground hover:text-foreground hover:bg-secondary",
+          item.comingSoon && "opacity-75"
+        )}
+      >
+        <Icon className="h-5 w-5" />
+        <div className="flex-1">
+          <div className="font-medium text-sm flex items-center gap-2">
+            {item.name}
+            {item.comingSoon && (
+              <span className="text-[10px] px-1 py-0 border rounded">
+                Soon
+              </span>
+            )}
+          </div>
+          {item.description && (
+            <div
+              className={cn(
+                "text-xs",
+                isActive
+                  ? "text-primary-foreground/80"
+                  : "text-muted-foreground"
+              )}
+            >
+              {item.description}
+            </div>
+          )}
+        </div>
+        {isActive && <ChevronRight className="h-4 w-4" />}
+      </Link>
+    );
+  };
+
   return (
-    <div className="min-h-screen bg-slate-50">
+    <div className="min-h-screen bg-background">
       {/* Mobile menu button */}
       <button
         onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
-        className="fixed top-4 left-4 z-50 rounded-lg bg-white p-2 shadow-lg md:hidden"
+        className="fixed top-4 left-4 z-50 rounded-lg bg-card p-2 shadow-lg lg:hidden border"
       >
         {isMobileMenuOpen ? (
           <X className="h-6 w-6" />
@@ -77,7 +294,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
       {/* Mobile overlay */}
       {isMobileMenuOpen && (
         <div
-          className="fixed inset-0 z-30 bg-black/50 md:hidden"
+          className="fixed inset-0 z-30 bg-black/50 lg:hidden"
           onClick={() => setIsMobileMenuOpen(false)}
         />
       )}
@@ -85,47 +302,60 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
       {/* Sidebar */}
       <aside
         className={cn(
-          "fixed left-0 top-0 z-40 h-screen w-64 border-r border-slate-200 bg-white transition-transform duration-300 md:translate-x-0",
+          "fixed left-0 top-0 z-40 h-screen w-[280px] border-r bg-card transition-transform duration-300 lg:translate-x-0",
           isMobileMenuOpen ? "translate-x-0" : "-translate-x-full"
         )}
       >
         <div className="flex h-full flex-col">
           {/* Logo/Header */}
-          <div className="border-b border-slate-200 p-6 pt-20 md:pt-6">
-            <h1 className="text-xl font-bold text-slate-900">Inventory System</h1>
-            <p className="text-sm text-slate-500 mt-1">ALIC Asset Management</p>
+          <div className="border-b p-6 pt-20 lg:pt-6">
+            <Link href="/inventory" className="flex items-center gap-3">
+              <div className="bg-white dark:bg-slate-800 p-2 rounded-xl border shadow-sm">
+                <img
+                  src="/alic-logo.png"
+                  alt="ALIC"
+                  className="h-10 w-10 object-contain"
+                  onError={(e) => {
+                    const target = e.target as HTMLImageElement;
+                    target.style.display = "none";
+                  }}
+                />
+              </div>
+              <div className="flex-1 min-w-0">
+                <h1 className="font-bold text-lg truncate">ALIC</h1>
+                <p className="text-xs text-muted-foreground truncate">
+                  Management System
+                </p>
+              </div>
+            </Link>
           </div>
 
           {/* Navigation */}
-          <nav className="flex-1 space-y-1 overflow-y-auto p-4">
-            {filteredNavItems.map((item) => {
-              const Icon = item.icon;
-              const isActive = pathname === item.href;
-              return (
-                <Link
-                  key={item.href + item.label}
-                  href={item.href}
-                  onClick={() => setIsMobileMenuOpen(false)}
-                  className={`flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
-                    isActive
-                      ? "bg-slate-100 text-slate-900"
-                      : "text-slate-600 hover:bg-slate-50 hover:text-slate-900"
-                  }`}
-                >
-                  <Icon className="h-5 w-5" />
-                  {item.label}
-                </Link>
-              );
-            })}
+          <nav className="flex-1 p-4 space-y-6 overflow-y-auto">
+            {navigationSections.map((section) => (
+              <div key={section.title} className="space-y-2">
+                <div className="px-3 text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                  {section.title}
+                </div>
+                {section.items.map(renderNavItem)}
+              </div>
+            ))}
           </nav>
 
           {/* User info & logout - Always at bottom */}
-          <div className="mt-auto border-t border-slate-200 p-4">
-            <div className="mb-3 rounded-lg bg-slate-50 p-3">
-              <p className="text-sm font-medium text-slate-900 truncate">{user?.email}</p>
-              <p className="text-xs text-slate-500 mt-1">{getRoleDisplay()}</p>
+          <div className="mt-auto border-t p-4">
+            <div className="mb-3 rounded-lg bg-secondary p-3">
+              <p className="text-sm font-medium truncate">{user?.email}</p>
+              <p className="text-xs text-muted-foreground mt-1">
+                {getRoleDisplay()}
+              </p>
             </div>
-            <Button onClick={signOut} variant="outline" size="sm" className="w-full">
+            <Button
+              onClick={signOut}
+              variant="outline"
+              size="sm"
+              className="w-full"
+            >
               <LogOut className="mr-2 h-4 w-4" />
               Sign Out
             </Button>
@@ -134,8 +364,8 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
       </aside>
 
       {/* Main content */}
-      <main className="min-h-screen md:ml-64">
-        <div className="container mx-auto p-8 pt-20 md:pt-8">{children}</div>
+      <main className="min-h-screen lg:ml-[280px]">
+        <div className="container mx-auto p-8 pt-20 lg:pt-8">{children}</div>
       </main>
     </div>
   );
