@@ -4,7 +4,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { Button } from "@/components/ui/button";
 import { usePathname } from "next/navigation";
 import Link from "next/link";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { cn } from "@/lib/utils";
 import {
   Package,
@@ -23,6 +23,7 @@ import {
   Building,
   UserCheck,
   ChevronRight,
+  ChevronDown,
 } from "lucide-react";
 
 interface DashboardLayoutProps {
@@ -48,6 +49,24 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
   const { user, isAssetManager, isSystemAdmin, signOut } = useAuth();
   const pathname = usePathname();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  
+  // State for collapsible sections - all collapsed by default
+  const [expandedSections, setExpandedSections] = useState<Set<string>>(
+    new Set()
+  );
+
+  // Toggle section expansion
+  const toggleSection = (title: string) => {
+    setExpandedSections((prev) => {
+      const next = new Set(prev);
+      if (next.has(title)) {
+        next.delete(title);
+      } else {
+        next.add(title);
+      }
+      return next;
+    });
+  };
 
   // Treat system admin as having all admin permissions
   const isAdmin = isSystemAdmin || isAssetManager;
@@ -59,20 +78,17 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
     return "Ministry Leader";
   };
 
+  // Dashboard link (standalone, not in a collapsible group)
+  const dashboardItem: NavItem = {
+    name: "Dashboard",
+    href: "/dashboard",
+    icon: Home,
+    description: "Calendar overview",
+    external: true,
+  };
+
   // Navigation configuration - Unified across Calendar and Inventory apps
   const navigationSections: NavSection[] = [
-    {
-      title: "Overview",
-      items: [
-        {
-          name: "Dashboard",
-          href: "/dashboard",
-          icon: Home,
-          description: "Calendar overview",
-          external: true,
-        },
-      ],
-    },
     {
       title: "Calendar",
       items: [
@@ -113,10 +129,10 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
       title: "Inventory",
       items: [
         {
-          name: "Dashboard",
+          name: "Asset Overview",
           href: "/inventory",
           icon: LayoutDashboard,
-          description: "Inventory overview",
+          description: "Inventory dashboard",
         },
         {
           name: "Assets",
@@ -144,7 +160,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
         },
       ],
     },
-    ...(isSystemAdmin
+    ...(isAdmin
       ? [
           {
             title: "Administration",
@@ -174,7 +190,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
           },
         ]
       : []),
-    ...(isSystemAdmin
+    ...(isAdmin
       ? [
           {
             title: "Coming Soon",
@@ -193,6 +209,24 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
         ]
       : []),
   ];
+
+  // Auto-expand section containing the current route
+  useEffect(() => {
+    const matchingSection = navigationSections.find((section) =>
+      section.items.some((item) => {
+        if (item.href === "/inventory") {
+          return pathname === item.href;
+        }
+        return pathname === item.href || pathname?.startsWith(item.href + "/");
+      })
+    );
+    if (matchingSection) {
+      setExpandedSections((prev) => {
+        if (prev.has(matchingSection.title)) return prev;
+        return new Set([...prev, matchingSection.title]);
+      });
+    }
+  }, [pathname, isAdmin]); // Re-run when isAdmin changes (auth loads)
 
   // Check if a path is active
   const isPathActive = (href: string) => {
@@ -331,15 +365,40 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
           </div>
 
           {/* Navigation */}
-          <nav className="flex-1 p-4 space-y-6 overflow-y-auto">
-            {navigationSections.map((section) => (
-              <div key={section.title} className="space-y-2">
-                <div className="px-3 text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-                  {section.title}
+          <nav className="flex-1 p-4 space-y-2 overflow-y-auto">
+            {/* Standalone Dashboard link */}
+            <div className="mb-2">
+              {renderNavItem(dashboardItem)}
+            </div>
+            
+            {/* Collapsible sections */}
+            {navigationSections.map((section) => {
+              const isExpanded = expandedSections.has(section.title);
+              return (
+                <div key={section.title} className="space-y-1">
+                  <button
+                    type="button"
+                    onClick={() => toggleSection(section.title)}
+                    className="w-full flex items-center justify-between px-3 py-2 text-xs font-semibold text-muted-foreground uppercase tracking-wider hover:text-foreground hover:bg-secondary/50 rounded-lg transition-colors"
+                  >
+                    <span>{section.title}</span>
+                    {isExpanded ? (
+                      <ChevronDown className="h-4 w-4" />
+                    ) : (
+                      <ChevronRight className="h-4 w-4" />
+                    )}
+                  </button>
+                  <div
+                    className={cn(
+                      "space-y-1 overflow-hidden transition-all duration-200",
+                      isExpanded ? "max-h-[500px] opacity-100" : "max-h-0 opacity-0"
+                    )}
+                  >
+                    {section.items.map(renderNavItem)}
+                  </div>
                 </div>
-                {section.items.map(renderNavItem)}
-              </div>
-            ))}
+              );
+            })}
           </nav>
 
           {/* User info & logout - Always at bottom */}
