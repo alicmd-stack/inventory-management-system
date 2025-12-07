@@ -71,6 +71,22 @@ const nextConfig = {
         destination: `${calendarApp}/rooms/:path*`,
       },
       {
+        source: "/budget",
+        destination: `${calendarApp}/budget`,
+      },
+      {
+        source: "/budget/:path*",
+        destination: `${calendarApp}/budget/:path*`,
+      },
+      {
+        source: "/members",
+        destination: `${calendarApp}/members`,
+      },
+      {
+        source: "/members/:path*",
+        destination: `${calendarApp}/members/:path*`,
+      },
+      {
         source: "/public",
         destination: `${calendarApp}/public`,
       },
