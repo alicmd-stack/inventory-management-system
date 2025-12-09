@@ -21,6 +21,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { SearchableSelect } from "@/components/ui/searchable-select";
 import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
 import {
@@ -383,7 +384,14 @@ export default function TransfersPage() {
               <form onSubmit={handleSubmit} className="space-y-4">
                 <div className="space-y-2">
                   <Label>Asset *</Label>
-                  <Select
+                  <SearchableSelect
+                    options={
+                      assets?.map((asset) => ({
+                        value: asset.id,
+                        label: asset.asset_tag_number,
+                        description: asset.asset_description || undefined,
+                      })) ?? []
+                    }
                     value={formData.asset_id}
                     onValueChange={(value) => {
                       const asset = assets?.find((a) => a.id === value);
@@ -394,19 +402,10 @@ export default function TransfersPage() {
                         previous_location: asset?.physical_location || "",
                       });
                     }}
-                    required
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select asset" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {assets?.map((asset) => (
-                        <SelectItem key={asset.id} value={asset.id}>
-                          {asset.asset_tag_number} - {asset.asset_description}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                    placeholder="Search assets..."
+                    searchPlaceholder="Type asset tag or description..."
+                    emptyMessage="No matching assets found."
+                  />
                 </div>
 
                 <div className="grid grid-cols-2 gap-4">
