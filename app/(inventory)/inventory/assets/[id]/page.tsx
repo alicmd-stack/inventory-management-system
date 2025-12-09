@@ -36,9 +36,17 @@ export default function AssetDetailPage() {
   const params = useParams<{ id: string }>();
   const assetId = Array.isArray(params?.id) ? params?.id[0] : params?.id;
   const queryClient = useQueryClient();
-  
+
   const [editDialogOpen, setEditDialogOpen] = useState(false);
   const [assetTagError, setAssetTagError] = useState<string | null>(null);
+  const [entryType, setEntryType] = useState<"new_purchase" | "existing_inventory">("new_purchase");
+
+  // Date constraints for acquisition date
+  const today = new Date().toISOString().split("T")[0];
+  const oneYearAgo = new Date();
+  oneYearAgo.setFullYear(oneYearAgo.getFullYear() - 1);
+  const oneYearAgoStr = oneYearAgo.toISOString().split("T")[0];
+
   const [formData, setFormData] = useState({
     asset_tag_number: "",
     asset_description: "",
@@ -63,7 +71,7 @@ export default function AssetDetailPage() {
         .schema("inventory")
         .from("asset")
         .select("category, physical_location");
-      
+
       if (error) {
         console.error("Error fetching assets:", error);
         return [];
@@ -105,38 +113,38 @@ export default function AssetDetailPage() {
 
       // Fetch related data
       if (data?.ministry_assigned) {
-        const { data: ministry } = await supabase
+        const { data: ministry } = (await supabase
           .from("ministry")
           .select("name")
           .eq("id", data.ministry_assigned)
-          .maybeSingle() as { data: { name: string } | null };
+          .maybeSingle()) as { data: { name: string } | null };
         ministryName = ministry?.name ?? null;
       }
 
       if (data?.church_branch_id) {
-        const { data: branch } = await supabase
+        const { data: branch } = (await supabase
           .from("church_branch")
           .select("name")
           .eq("id", data.church_branch_id)
-          .maybeSingle() as { data: { name: string } | null };
+          .maybeSingle()) as { data: { name: string } | null };
         churchBranchName = branch?.name ?? null;
       }
 
       if (data?.prepared_by) {
-        const { data: preparedBy } = await supabase
+        const { data: preparedBy } = (await supabase
           .from("user_profile")
           .select("full_name")
           .eq("id", data.prepared_by)
-          .maybeSingle() as { data: { full_name: string } | null };
+          .maybeSingle()) as { data: { full_name: string } | null };
         preparedByName = preparedBy?.full_name ?? null;
       }
 
       if (data?.updated_by) {
-        const { data: updatedBy } = await supabase
+        const { data: updatedBy } = (await supabase
           .from("user_profile")
           .select("full_name")
           .eq("id", data.updated_by)
-          .maybeSingle() as { data: { full_name: string } | null };
+          .maybeSingle()) as { data: { full_name: string } | null };
         updatedByName = updatedBy?.full_name ?? null;
       }
 
@@ -162,13 +170,23 @@ export default function AssetDetailPage() {
         unit_of_measure: asset.unit_of_measure || "ea",
         acquisition_date: asset.acquisition_date || "",
         acquisition_cost: String(asset.acquisition_cost || ""),
-        estimated_useful_life_years: asset.estimated_useful_life_years ? String(asset.estimated_useful_life_years) : "",
+        estimated_useful_life_years: asset.estimated_useful_life_years
+          ? String(asset.estimated_useful_life_years)
+          : "",
         depreciation_method: asset.depreciation_method || "",
         physical_location: asset.physical_location || "",
         current_condition: asset.current_condition || "",
         remarks: asset.remarks || "",
       });
       setAssetTagError(null);
+
+      // Infer entry type based on acquisition date (if older than 1 year, assume existing inventory)
+      if (asset.acquisition_date) {
+        const acquisitionDate = new Date(asset.acquisition_date);
+        const oneYearAgoDate = new Date();
+        oneYearAgoDate.setFullYear(oneYearAgoDate.getFullYear() - 1);
+        setEntryType(acquisitionDate < oneYearAgoDate ? "existing_inventory" : "new_purchase");
+      }
     }
   }, [asset, editDialogOpen]);
 
@@ -249,16 +267,22 @@ export default function AssetDetailPage() {
         const errorMessage = error.message ?? "";
         // Some errors (like PostgrestError) include a code field
         const errorCode = (error as { code?: string }).code ?? "";
-        
-        if (errorCode === "23505" || errorMessage.includes("duplicate key") || errorMessage.includes("asset_tag_number")) {
-          throw new Error(`Asset tag "${data.asset_tag_number}" already exists. Please use a different tag number.`);
+
+        if (
+          errorCode === "23505" ||
+          errorMessage.includes("duplicate key") ||
+          errorMessage.includes("asset_tag_number")
+        ) {
+          throw new Error(
+            `Asset tag "${data.asset_tag_number}" already exists. Please use a different tag number.`
+          );
         }
-        
+
         // Check for disposed asset constraint
         if (errorMessage.includes("Cannot update disposed asset")) {
           throw new Error("Cannot edit disposed asset. Disposed assets are read-only.");
         }
-        
+
         throw error;
       }
     },
@@ -329,29 +353,28 @@ export default function AssetDetailPage() {
             <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
               <DialogHeader>
                 <DialogTitle>Edit Asset</DialogTitle>
-                <DialogDescription>
-                  Update the asset information below.
-                </DialogDescription>
+                <DialogDescription>Update the asset information below.</DialogDescription>
               </DialogHeader>
               <form onSubmit={handleSubmit} className="space-y-4">
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">
                     <Label htmlFor="category">Category *</Label>
-                    <Input
-                      id="category"
-                      placeholder="Select or type category"
+                    <Select
                       value={formData.category}
-                      onChange={(e) =>
-                        setFormData({ ...formData, category: e.target.value })
-                      }
-                      list="category-suggestions-edit"
+                      onValueChange={(value) => setFormData({ ...formData, category: value })}
                       required
-                    />
-                    <datalist id="category-suggestions-edit">
-                      {availableCategories.map((category) => (
-                        <option key={category} value={category} />
-                      ))}
-                    </datalist>
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select category" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {availableCategories.map((category) => (
+                          <SelectItem key={category} value={category}>
+                            {category}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
                   </div>
 
                   <div className="space-y-2">
@@ -368,9 +391,7 @@ export default function AssetDetailPage() {
                       className={assetTagError ? "border-red-500" : ""}
                       required
                     />
-                    {assetTagError && (
-                      <p className="text-xs text-red-600">{assetTagError}</p>
-                    )}
+                    {assetTagError && <p className="text-xs text-red-600">{assetTagError}</p>}
                   </div>
                 </div>
 
@@ -431,9 +452,7 @@ export default function AssetDetailPage() {
                       type="number"
                       min="1"
                       value={formData.quantity}
-                      onChange={(e) =>
-                        setFormData({ ...formData, quantity: e.target.value })
-                      }
+                      onChange={(e) => setFormData({ ...formData, quantity: e.target.value })}
                       required
                     />
                   </div>
@@ -452,12 +471,46 @@ export default function AssetDetailPage() {
                   </div>
                 </div>
 
+                <div className="space-y-2">
+                  <Label>Entry Type *</Label>
+                  <div className="flex items-center gap-6">
+                    <label className="flex items-center gap-2 cursor-pointer">
+                      <input
+                        type="radio"
+                        name="entry_type_edit"
+                        value="new_purchase"
+                        checked={entryType === "new_purchase"}
+                        onChange={(e) =>
+                          setEntryType(e.target.value as "new_purchase" | "existing_inventory")
+                        }
+                        className="w-4 h-4"
+                      />
+                      <span className="text-sm">New Acquisition</span>
+                    </label>
+                    <label className="flex items-center gap-2 cursor-pointer">
+                      <input
+                        type="radio"
+                        name="entry_type_edit"
+                        value="existing_inventory"
+                        checked={entryType === "existing_inventory"}
+                        onChange={(e) =>
+                          setEntryType(e.target.value as "new_purchase" | "existing_inventory")
+                        }
+                        className="w-4 h-4"
+                      />
+                      <span className="text-sm">Existing Inventory</span>
+                    </label>
+                  </div>
+                </div>
+
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">
                     <Label htmlFor="acquisition_date">Acquisition Date *</Label>
                     <Input
                       id="acquisition_date"
                       type="date"
+                      min={entryType === "new_purchase" ? oneYearAgoStr : undefined}
+                      max={today}
                       value={formData.acquisition_date}
                       onChange={(e) =>
                         setFormData({ ...formData, acquisition_date: e.target.value })
@@ -485,21 +538,24 @@ export default function AssetDetailPage() {
 
                 <div className="space-y-2">
                   <Label htmlFor="physical_location">Physical Location *</Label>
-                  <Input
-                    id="physical_location"
-                    placeholder="Select or type location"
+                  <Select
                     value={formData.physical_location}
-                    onChange={(e) =>
-                      setFormData({ ...formData, physical_location: e.target.value })
+                    onValueChange={(value) =>
+                      setFormData({ ...formData, physical_location: value })
                     }
-                    list="location-suggestions-edit"
                     required
-                  />
-                  <datalist id="location-suggestions-edit">
-                    {availableLocations.map((location) => (
-                      <option key={location} value={location} />
-                    ))}
-                  </datalist>
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select location" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {availableLocations.map((location) => (
+                        <SelectItem key={location} value={location}>
+                          {location}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </div>
 
                 <div className="space-y-2">
@@ -508,9 +564,7 @@ export default function AssetDetailPage() {
                     id="remarks"
                     placeholder="Additional notes..."
                     value={formData.remarks}
-                    onChange={(e) =>
-                      setFormData({ ...formData, remarks: e.target.value })
-                    }
+                    onChange={(e) => setFormData({ ...formData, remarks: e.target.value })}
                     rows={2}
                   />
                 </div>
@@ -519,11 +573,7 @@ export default function AssetDetailPage() {
                   <Button type="submit" disabled={updateAssetMutation.isPending || !!assetTagError}>
                     {updateAssetMutation.isPending ? "Updating..." : "Update Asset"}
                   </Button>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    onClick={() => setEditDialogOpen(false)}
-                  >
+                  <Button type="button" variant="outline" onClick={() => setEditDialogOpen(false)}>
                     Cancel
                   </Button>
                 </div>
@@ -561,8 +611,8 @@ export default function AssetDetailPage() {
                 asset.asset_status === "active"
                   ? "bg-green-100 text-green-800"
                   : asset.asset_status === "disposed"
-                  ? "bg-gray-100 text-gray-800"
-                  : "bg-red-100 text-red-800"
+                    ? "bg-gray-100 text-gray-800"
+                    : "bg-red-100 text-red-800"
               }
             >
               {asset.asset_status}
@@ -586,10 +636,10 @@ export default function AssetDetailPage() {
                 asset.current_condition === "New"
                   ? "bg-blue-100 text-blue-800"
                   : asset.current_condition === "Good"
-                  ? "bg-green-100 text-green-800"
-                  : asset.current_condition === "Fair"
-                  ? "bg-yellow-100 text-yellow-800"
-                  : "bg-red-100 text-red-800"
+                    ? "bg-green-100 text-green-800"
+                    : asset.current_condition === "Fair"
+                      ? "bg-yellow-100 text-yellow-800"
+                      : "bg-red-100 text-red-800"
               }
             >
               {asset.current_condition}
@@ -632,9 +682,7 @@ export default function AssetDetailPage() {
           <div>
             <p className="text-sm text-slate-600">Acquisition Date</p>
             <p className="font-medium">
-              {asset.acquisition_date
-                ? new Date(asset.acquisition_date).toLocaleDateString()
-                : "—"}
+              {asset.acquisition_date ? new Date(asset.acquisition_date).toLocaleDateString() : "—"}
             </p>
           </div>
           <div>
@@ -697,15 +745,11 @@ export default function AssetDetailPage() {
           <div className="grid md:grid-cols-2 gap-6 pb-4 border-b border-slate-200">
             <div>
               <p className="text-sm text-slate-600">Created On</p>
-              <p className="font-medium">
-                {new Date(asset.created_at).toLocaleString()}
-              </p>
+              <p className="font-medium">{new Date(asset.created_at).toLocaleString()}</p>
             </div>
             <div>
               <p className="text-sm text-slate-600">Prepared By</p>
-              <p className="font-medium">
-                {asset.prepared_by_name || "—"}
-              </p>
+              <p className="font-medium">{asset.prepared_by_name || "—"}</p>
             </div>
           </div>
 
@@ -713,15 +757,11 @@ export default function AssetDetailPage() {
           <div className="grid md:grid-cols-2 gap-6">
             <div>
               <p className="text-sm text-slate-600">Last Updated</p>
-              <p className="font-medium">
-                {new Date(asset.updated_at).toLocaleString()}
-              </p>
+              <p className="font-medium">{new Date(asset.updated_at).toLocaleString()}</p>
             </div>
             <div>
               <p className="text-sm text-slate-600">Updated By</p>
-              <p className="font-medium">
-                {asset.updated_by_name || "—"}
-              </p>
+              <p className="font-medium">{asset.updated_by_name || "—"}</p>
             </div>
           </div>
         </CardContent>
@@ -729,4 +769,3 @@ export default function AssetDetailPage() {
     </div>
   );
 }
-

@@ -460,20 +460,24 @@ export default function TransfersPage() {
 
                   <div className="space-y-2">
                     <Label>To Location *</Label>
-                    <Input
-                      list="locations-list"
-                      placeholder="Select or type location"
+                    <Select
                       value={formData.new_location}
-                      onChange={(e) =>
-                        setFormData({ ...formData, new_location: e.target.value })
+                      onValueChange={(value) =>
+                        setFormData({ ...formData, new_location: value })
                       }
                       required
-                    />
-                    <datalist id="locations-list">
-                      {locations?.map((location) => (
-                        <option key={location} value={location} />
-                      ))}
-                    </datalist>
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select location" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {locations?.map((location) => (
+                          <SelectItem key={location} value={location}>
+                            {location}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
                   </div>
                 </div>
 
