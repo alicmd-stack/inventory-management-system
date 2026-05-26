@@ -37,9 +37,9 @@ export async function updateSession(request: NextRequest) {
   const protectedPaths = ["/inventory", "/admin"];
   const isProtectedPath = protectedPaths.some((path) => request.nextUrl.pathname.startsWith(path));
 
-  // If user is not signed in and trying to access protected path, redirect to home page
+  // If user is not signed in and trying to access protected path, redirect to /auth
   if (!user && isProtectedPath) {
-    const redirectUrl = new URL("/", request.url);
+    const redirectUrl = new URL("/auth", request.url);
     return NextResponse.redirect(redirectUrl);
   }
 
